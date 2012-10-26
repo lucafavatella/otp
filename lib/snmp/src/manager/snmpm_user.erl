@@ -34,14 +34,14 @@
       Addr        :: term(),
       Port        :: integer(),
       Type        :: pdu | trap | inform | report,
-      SnmpInfo    :: {ErrorStatus, ErrorIndex, Varbinds},
-      UserId      :: term(),
+      SnmpInfo    :: {ErrorStatus, ErrorIndex, Varbinds}, %% XXX check SnmpPduInfo | SnmpTrapInfo | SnmpReportInfo | SnmpInformInfo
       ErrorStatus :: atom(),
       ErrorIndex  :: integer(),
       Varbinds    :: [#varbind{}],
       UserData    :: term(), %% supplied when the user registers
-      Reply       :: ignore | {register, UserId, AgentInfo}, %% XXX agent_info()?
-      AgentInfo   :: [{AgentInfoItem :: term(), AgentInfoValue :: term()}]. %% This is the same info as in update_agent_info/4
+      Reply       :: ignore | {register, UserId, AgentInfo}, %% XXX agent_info()? %% XXX check ignore | {register, UserId, TargetName, agent_info()} in the code (source: doc)
+      UserId      :: term(),
+      AgentInfo   :: [{AgentInfoItem :: atom(), AgentInfoValue :: term()}]. %% This is the same info as in update_agent_info/4
 
 -callback handle_pdu(TargetName, ReqId, SnmpResponse, UserData) -> Reply when
       TargetName   :: target_name(),
@@ -65,7 +65,8 @@
       ErrorIndex   :: integer(),
       Varbinds     :: [#varbind{}],
       UserData     :: term(), %% supplied when the user registers
-      Reply        :: ignore | unregister | {register, UserId, AgentInfo :: term()}. %% XXX agent_info() ???
+      Reply        :: ignore | unregister | {register, UserId, AgentInfo :: term()}, %% XXX agent_info() (list of tuple ...) ??? %% XXX Check ignore | unregister | {register, UserId, TargetName2, agent_info()} in src from doc
+      UserId       :: term().
 
 -callback handle_inform(TargetName, SnmpInform, UserData) -> Reply when
       TargetName  :: target_name(),
@@ -74,7 +75,8 @@
       ErrorIndex  :: integer(),
       Varbinds    :: [#varbind{}],
       UserData    :: term(), %% supplied when the user registers
-      Reply       :: ignore | unregister | {register, UserId, agent_info()} | no_reply.
+      Reply       :: ignore | unregister | {register, UserId, agent_info()} | no_reply, %% XX Check in the src from doc Reply = ignore | unregister | {register, UserId, TargetName2, agent_info()}
+      UserId      :: term().
 
 -callback handle_report(TargetName, SnmpReport, UserData) -> Reply when
       TargetName  :: target_name(),
@@ -83,4 +85,5 @@
       ErrorIndex  :: integer(),
       Varbinds    :: [#varbind{}],
       UserData    :: term(), %% supplied when the user registers
-      Reply       :: ignore | unregister | {register, UserId, agent_info()}.
+      Reply       :: ignore | unregister | {register, UserId, agent_info()},
+      UserId      :: term().

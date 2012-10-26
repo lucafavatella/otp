@@ -223,7 +223,7 @@
         <v>Varbinds = [varbind()]</v>
         <v>varbind() = #varbind</v>
         <v>UserData = term()</v>
-        <v>Reply = ignore | unregister | {register, UserId, TargetName2, agent_info()}</v>
+        <v>Reply = ignore | unregister | {register, UserId, TargetName2, agent_info()} | no_reply</v>
         <v>UserId = term()</v>
         <v>agent_info() = [{agent_info_item(), agent_info_value()}]</v>
       </type>
@@ -234,6 +234,10 @@
         <p>The only user which would return 
           <c>{register, UserId, TargetName2, agent_info()}</c> is the 
           <em>default user</em>.</p>
+        <!--
+            TODO test
+            If the return value is <c>no_reply</c>, no response (acknowledgment) to this inform_request will be sent; otherwise,
+        -->
         <p>If the 
           <seealso marker="snmp_app">inform request behaviour</seealso> 
           configuration option is set to <c>user</c> or 

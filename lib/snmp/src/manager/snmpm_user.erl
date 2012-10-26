@@ -19,79 +19,68 @@
 
 -module(snmpm_user).
 
--export([behaviour_info/1]).
+-include("../../include/snmp_types.hrl"). %% TODO remove dots for flymake
 
-behaviour_info(callbacks) ->
-    [{handle_error,    3}, 
-     {handle_agent,    5}, 
-     {handle_pdu,      4},
-     {handle_trap,     3},
-     {handle_inform,   3},
-     {handle_report,   3}];
-behaviour_info(_) ->
-    undefined.
+-type target_name() :: nonempty_string().
+-type oid() :: [byte()].
 
+-callback handle_error(ReqId, Reason, UserData) -> Reply when
+      ReqId    :: integer(),
+      Reason   :: term(),
+      UserData :: term(), %% supplied when the user registers
+      Reply    :: ignore.
 
-%% handle_error(ReqId, Reason, UserData) -> Reply
-%% ReqId       -> integer()
-%% Reason      -> term()
-%% UserData    -> term()     (supplied when the user register)
-%% Reply       -> ignore 
+-callback handle_agent(Addr, Port, Type, SnmpInfo, UserData) -> Reply when
+      Addr        :: term(),
+      Port        :: integer(),
+      Type        :: pdu | trap | inform | report,
+      SnmpInfo    :: {ErrorStatus, ErrorIndex, Varbinds},
+      UserId      :: term(),
+      ErrorStatus :: atom(),
+      ErrorIndex  :: integer(),
+      Varbinds    :: [#varbind{}],
+      UserData    :: term(), %% supplied when the user registers
+      Reply       :: ignore | {register, UserId, AgentInfo}, %% XXX agent_info()?
+      AgentInfo   :: [{AgentInfoItem :: term(), AgentInfoValue :: term()}]. %% This is the same info as in update_agent_info/4
 
-%% handle_agent(Addr, Port, Type, SnmpInfo, UserData) -> Reply
-%% Addr        -> term()
-%% Port        -> integer()
-%% Type        -> pdu | trap | inform | report
-%% SnmpInfo    -> {ErrorStatus, ErrorIndex, Varbinds}
-%% UserId      -> term()
-%% ErrorStatus -> atom()
-%% ErrorIndex  -> integer()
-%% Varbinds    -> [varbind()]
-%% UserData    -> term()     (supplied when the user register)
-%% Reply       -> ignore | {register, UserId, agent_info()}
-%% agent_info() -> [{agent_info_item(), agent_info_value()}]
-%%                 This is the same info as in update_agent_info/4
+-callback handle_pdu(TargetName, ReqId, SnmpResponse, UserData) -> Reply when
+      TargetName   :: target_name(),
+      ReqId        :: term(), %% returned when calling ag(...), ...
+      SnmpResponse :: {ErrorStatus, ErrorIndex, Varbinds},
+      ErrorStatus  :: atom(),
+      ErrorIndex   :: integer(),
+      Varbinds     :: [#varbind{}],
+      UserData     :: term(), %% supplied when the user registers
+      Reply        :: ignore.
 
-%% handle_pdu(TargetName, ReqId, SnmpResponse, UserData) -> Reply
-%% TargetName   -> target_name()
-%% ReqId        -> term() (returned when calling ag(...), ...)
-%% SnmpResponse -> {ErrorStatus, ErrorIndex, Varbinds}
-%% ErrorStatus  -> atom()
-%% ErrorIndex   -> integer()
-%% Varbinds     -> [varbind()]
-%% UserData     -> term()     (supplied when the user register)
-%% Reply        -> ignore 
+-callback handle_trap(TargetName, SnmpTrapInfo, UserData) -> Reply when
+      TargetName   :: target_name(),
+      SnmpTrapInfo :: {Enteprise, Generic, Spec, Timestamp, Varbinds} |
+                      {ErrorStatus, ErrorIndex, Varbinds},
+      Enteprise    :: oid(),
+      Generic      :: integer(),
+      Spec         :: integer(),
+      Timestamp    :: integer(),
+      ErrorStatus  :: atom(),
+      ErrorIndex   :: integer(),
+      Varbinds     :: [#varbind{}],
+      UserData     :: term(), %% supplied when the user registers
+      Reply        :: ignore | unregister | {register, UserId, AgentInfo :: term()}. %% XXX agent_info() ???
 
-%% handle_trap(TargetName, SnmpTrapInfo, UserData) -> Reply
-%% TargetName   -> target_name()
-%% SnmpTrapInfo -> {Enteprise, Generic, Spec, Timestamp, Varbinds} |
-%%                 {ErrorStatus, ErrorIndex, Varbinds}
-%% Enteprise    -> oid()
-%% Generic      -> integer() 
-%% Spec         -> integer() 
-%% Timestamp    -> integer() 
-%% ErrorStatus  -> atom()
-%% ErrorIndex   -> integer()
-%% Varbinds     -> [varbind()]
-%% UserData     -> term()     (supplied when the user register)
-%% Reply        -> ignore | unregister | {register, UserId, agent_info()}
+-callback handle_inform(TargetName, SnmpInform, UserData) -> Reply when
+      TargetName  :: target_name(),
+      SnmpInform  :: {ErrorStatus, ErrorIndex, Varbinds},
+      ErrorStatus :: atom(),
+      ErrorIndex  :: integer(),
+      Varbinds    :: [#varbind{}],
+      UserData    :: term(), %% supplied when the user registers
+      Reply       :: ignore | unregister | {register, UserId, agent_info()} | no_reply.
 
-%% handle_inform(TargetName, SnmpInform, UserData) -> Reply
-%% TargetName  -> target_name()
-%% SnmpInform  -> {ErrorStatus, ErrorIndex, Varbinds}
-%% ErrorStatus -> atom()
-%% ErrorIndex  -> integer()
-%% Varbinds    -> [varbind()]
-%% UserData    -> term()     (supplied when the user register)
-%% Reply       -> ignore | unregister | {register, UserId, agent_info()} |
-%%                no_reply
-
-%% handle_report(TargetName, SnmpReport, UserData) -> Reply
-%% TargetName  -> target_name()
-%% SnmpReport  -> {ErrorStatus, ErrorIndex, Varbinds}
-%% ErrorStatus -> integer()
-%% ErrorIndex  -> integer()
-%% Varbinds    -> [varbind()]
-%% UserData    -> term()     (supplied when the user register)
-%% Reply       -> ignore | unregister | {register, UserId, agent_info()}
-
+-callback handle_report(TargetName, SnmpReport, UserData) -> Reply when
+      TargetName  :: target_name(),
+      SnmpReport  :: {ErrorStatus, ErrorIndex, Varbinds},
+      ErrorStatus :: integer(),
+      ErrorIndex  :: integer(),
+      Varbinds    :: [#varbind{}],
+      UserData    :: term(), %% supplied when the user registers
+      Reply       :: ignore | unregister | {register, UserId, agent_info()}.

@@ -83,8 +83,8 @@ behaviour_info(_) ->
 %% ErrorIndex  -> integer()
 %% Varbinds    -> [varbind()]
 %% UserData    -> term()     (supplied when the user register)
-%% Reply       -> ignore | unregister | {register, UserId, agent_info()}
-%%          
+%% Reply       -> ignore | unregister | {register, UserId, agent_info()} |
+%%                no_reply
 
 %% handle_report(TargetName, SnmpReport, UserData) -> Reply
 %% TargetName  -> target_name()

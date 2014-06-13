@@ -125,7 +125,7 @@
       Port :: inet:port_number(),
       Options :: [connect_option()],
       Socket :: socket(),
-      Reason :: inet:posix().
+      Reason :: inet:posix() | nxdomain.
 
 connect(Address, Port, Opts) -> 
     connect(Address,Port,Opts,infinity).

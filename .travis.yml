@@ -1,0 +1,122 @@
+sudo: false
+language: c
+addons:
+  apt:
+    packages:
+      - unixodbc-dev
+before_script:
+  - set -e
+  - export ERL_TOP="$PWD"
+  - export MAKEFLAGS=-j6
+  - echo "$BAD_BEAM"; case "$BOOT" in smp) export BAD_BEAM=beam;; plain) export BAD_BEAM=beam.smp;; esac && test ! -z "$BAD_BEAM" && echo "$BAD_BEAM"
+  - mk_app() { make -C "${1:?}" "${2:?}" FLAVOR="${3:?}"; }
+  - get_app_deps() { erl -noshell -eval '{ok, F} = init:get_argument(dot_app), {ok, [{application, _, KVs}]} = file:consult(F), {_, Apps} = lists:keyfind(applications, 1, KVs), io:format(string:join([atom_to_list(A) || A <- Apps], " ")), init:stop().' -dot_app "${1:?}"; } ## Assumption: No spaces in app names.
+  - mk_app_and_deps() { local A="${1:?}"; local T="${2:?}"; local F="${3:?}"; mk_app "$A" "$T" "$F"; local AA=$(ls "$A"/ebin/*.app) && for AD in $(get_app_deps "$AA"); do mk_app "lib/$AD" "$T" "$F"; done; }
+  - print_test_specs() { erl -noshell -eval 'Ts = ts:tests(), io:format("ts:tests() found ~p test(s):~n\t~1000p~n\t~1000p (sorted)~n", [length(Ts), Ts, lists:sort(Ts)]), init:stop().'; }
+  - build_dummy_plt() { local M="dummy"; printf "\055module($M).\n-export([f/0]).\nf() -> ok.\n" > "$M.erl"; erlc +debug_info "$M.erl"; dialyzer --build_plt --output_plt "${1:?}" "$M.beam"; }
+  - dialyze_otp() { ./otp_build "$BOOT" && { local P="${1:?}"; dialyzer --plt "$P" erts/*/ebin || true; dialyzer --plt "$P" erts/*/ebin lib/*/ebin || true; dialyzer --plt "$P" bootstrap/lib/*/ebin || true; }; }
+script:
+  ## Compile code, running a more granular version of 'otp_build setup -a'...
+  - ./otp_build autoconf
+  - ./otp_build configure $CFG_PARAMS ## --enable-silent-rules
+  - ./otp_build "$BOOT" ## boot -a
+  - echo "$BAD_BEAM" && { test $(find . -type f -name "$BAD_BEAM" | wc -l) -eq 0 || exit 1; } ## Check that no CPU cycles went wasted in building an additional BEAM - e.g. the plain one (i.e. non-SMP) `beam` in addition to the SMP `beam.smp`.
+  - export PATH="$ERL_TOP/bin:$PATH"
+  - echo "$DEPS"; for D in $DEPS; do mk_app "lib/$D" opt "$BOOT"; done
+  - for A in $(find "$ERL_TOP/lib" -maxdepth 3 -type f -name "$TEST_SPEC.spec" -print | xargs dirname | xargs dirname); do mk_app_and_deps "$A" opt "$BOOT"; done ## If the spec is not in lib/ (thus in erts/), the corresponding app has already been built for sure hence do nothing. Otherwise, ensure corresponding app is built. ## FLAVOR needed for hipe.
+  ## Build tests, running a more granular version of 'otp_build tests'...
+  - export TESTROOT="$ERL_TOP/release/tests"
+  - make -C "$ERL_TOP/lib/test_server" release_tests ## Uses TESTROOT
+  - make -C "$(dirname $(find $ERL_TOP -type f -name $TEST_SPEC.spec))" release_tests ## Uses TESTROOT
+  ## Run tests...
+  - cd "$TESTROOT/test_server"
+  - print_test_specs
+  - for TS in $(find "$ERL_TOP" -maxdepth 4 -type f -name '*.spec' -print | grep -v '_bench.spec$' | grep -v '_smoke.spec$' | xargs -I XXX basename XXX .spec); do echo -n "$TS"; C=$(grep -c -e "- BOOT=smp TEST_SPEC=$TS\(\$\| \)" "$ERL_TOP/.travis.yml"); printf "\t$C\n"; { test "$C" -eq 1 || exit 1; }; done ## Hardcode expectation that each test spec has a (...t least one potentially commented out) Travis CI job.
+  - erl -noshell -s ts install -s init stop
+  - case "$TEST_SPEC" in emulator) travis_wait erl -noshell -s ts run "$TEST_SPEC" -s init stop 2>&1 | sed -e 's/[*]\{100\}/**...*/g' -e 's/1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,$/1,2,...,21,/g' -e 's/22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,$/22,...,39,/g' -e 's/40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,/40,...,57,/g' -e 's/58,59,60,61,62,63,64/58,...,63,64/g';; *) travis_wait erl -noshell -s ts run $TEST_SPEC -s init stop;; esac
+  ## Fail the build if any test failed...
+  - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.summary
+  - test $(ls "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.summary | wc -l) -eq 1
+  - test $(cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.summary | wc -l) -eq 1
+  - test $(cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.summary | grep '^{summary,{[^,]\+,0,[^,]\+,[^,]\+}}.$' | wc -l) -eq 1
+after_script:
+  ## Expose test results...
+  - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.log | grep -v -e '^=logfile' -e '^=started' -e '^=ended' -e '^=finished' -e '^=result[ ]*ok$'
+  - cat "$TESTROOT"/test_server/index.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
+  - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.log.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
+  ## Dialyze OTP...
+  - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; dialyze_otp "dummy.plt"; set +x;; *) true;; esac
+notifications:
+  email: false
+matrix:
+  include:
+    ##- env: CFG_PARAMS="--disable-smp-support" BOOT=plain TEST_SPEC=emulator
+    ##- env: CFG_PARAMS="--disable-smp-support" BOOT=plain TEST_SPEC=hipe
+    ##- env: CFG_PARAMS="--disable-smp-support" BOOT=plain TEST_SPEC=system
+  allow_failures:
+    ## - env: BOOT=smp TEST_SPEC=tools ## suite.summary: {summary,{80,2,18,0}}.
+    - env: BOOT=smp TEST_SPEC=epmd ## "The log length has exceeded the limit of 4 Megabytes". Sample repeated output lines below:
+      ##
+      ## epmd: Sun Jul 12 00:44:19 2015: Extra info size error in ALIVE2_REQ
+      ##
+      ## epmd: Sun Jul 12 00:44:43 2015: extra data is too long (1021)
+      ## ï¿½...
+      ## ½ï¿...
+      ## ¿½ï
+      ##
+      ## epmd: Sun Jul 12 00:44:43 2015: invalid packet size (3058)
+  fast_finish: true
+env:
+  ## - BOOT=smp TEST_SPEC=emulator
+  ## - BOOT=smp TEST_SPEC=test_server
+  ## - BOOT=smp TEST_SPEC=kernel
+  ## - BOOT=smp TEST_SPEC=stdlib
+  ## - BOOT=smp TEST_SPEC=compiler
+  - BOOT=smp TEST_SPEC=hipe
+  ## - BOOT=smp TEST_SPEC=erl_interface
+  ## - BOOT=smp TEST_SPEC=jinterface
+  ## - BOOT=smp TEST_SPEC=sasl
+  ## - BOOT=smp TEST_SPEC=tools
+  ## - BOOT=smp TEST_SPEC=runtime_tools
+  ## - BOOT=smp TEST_SPEC=parsetools
+  ## - BOOT=smp TEST_SPEC=debugger
+  ## - BOOT=smp TEST_SPEC=ic
+  ## - BOOT=smp TEST_SPEC=orber
+  ## - BOOT=smp TEST_SPEC=inets
+  ## - BOOT=smp TEST_SPEC=asn1
+  ## - BOOT=smp TEST_SPEC=os_mon DEPS="otp_mibs" ## os_mon code includes lib/otp_mibs/include/OTP-MIB.hrl
+  ## - BOOT=smp TEST_SPEC=snmp
+  ## - BOOT=smp TEST_SPEC=mnesia
+  ## - BOOT=smp TEST_SPEC=common_test
+  ## - BOOT=smp TEST_SPEC=cosEvent        DEPS="orber"                            ## cosEvent test includes lib/orber/COSS/CosNaming/CosNaming.hrl
+  ## - BOOT=smp TEST_SPEC=cosEventDomain  DEPS="cosEvent cosTime cosNotification" ## cosEventDomain code includes lib/cosNotification/include/CosNotification.hrl
+  ## - BOOT=smp TEST_SPEC=cosFileTransfer DEPS="cosProperty"                      ## cosFileTransfer code includes lib/cosProperty/include/CosPropertyService.hrl
+  ## - BOOT=smp TEST_SPEC=cosNotification DEPS="cosEvent cosTime"                 ## cosNotification code includes lib/cosEvent/include/CosEventChannelAdmin.hrl and cosTime/include/TimeBase.hrl
+  ## - BOOT=smp TEST_SPEC=cosProperty
+  ## - BOOT=smp TEST_SPEC=cosTime
+  ## - BOOT=smp TEST_SPEC=cosTransactions
+  ## - BOOT=smp TEST_SPEC=crypto
+  - BOOT=smp TEST_SPEC=dialyzer
+  ## - BOOT=smp TEST_SPEC=diameter
+  ## - BOOT=smp TEST_SPEC=edoc
+  ## - BOOT=smp TEST_SPEC=eldap
+  ## - BOOT=smp TEST_SPEC=epmd
+  ## - BOOT=smp TEST_SPEC=erl_docgen
+  ## - BOOT=smp TEST_SPEC=et
+  ## - BOOT=smp TEST_SPEC=eunit
+  ## - BOOT=smp TEST_SPEC=gs
+  ## - BOOT=smp TEST_SPEC=megaco DEPS="asn1" ## megaco test uses lib/asn1/priv/lib/asn1rt_nif.so
+  ## - BOOT=smp TEST_SPEC=observer
+  ## - BOOT=smp TEST_SPEC=odbc ## odbc code includes system-wide sql.h
+  ## - BOOT=smp TEST_SPEC=ose
+  ## - BOOT=smp TEST_SPEC=percept
+  ## - BOOT=smp TEST_SPEC=public_key
+  ## - BOOT=smp TEST_SPEC=reltool
+  ## - BOOT=smp TEST_SPEC=ssh DEPS="public_key" ## ssh code includes lib/public_key/include/public_key.hrl that in turn includes OTP-PUB-KEY.hrl and PKCS-FRAME.hrl
+  ## - BOOT=smp TEST_SPEC=ssl DEPS="public_key" ## ssl code includes lib/public_key/include/public_key.hrl that in turn includes OTP-PUB-KEY.hrl and PKCS-FRAME.hrl
+  ## - BOOT=smp TEST_SPEC=syntax_tools
+  - BOOT=smp TEST_SPEC=typer
+  ## - BOOT=smp TEST_SPEC=webtool
+  ## - BOOT=smp TEST_SPEC=wx
+  ## - BOOT=smp TEST_SPEC=xmerl
+  ## - BOOT=smp TEST_SPEC=system

@@ -25,7 +25,7 @@
 # ----------------------------------------------------------------------
 
 # And you'd think that this would be obvious... :-)
-SHELL = /bin/sh
+SHELL = time /bin/sh
 
 # The top directory in which Erlang is unpacked
 ERL_TOP = @ERL_TOP@

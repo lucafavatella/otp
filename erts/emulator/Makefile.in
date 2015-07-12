@@ -227,7 +227,7 @@ ERTS_ENABLE_KERNEL_POLL=@ERTS_ENABLE_KERNEL_POLL@
 #
 #
 #
-SHELL   = /bin/sh
+SHELL   = time /bin/sh
 CC      = @CC@
 ifeq ($(TARGET),win32)
 ifeq ($(TYPE),debug)

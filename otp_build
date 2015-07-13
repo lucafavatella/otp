@@ -51,7 +51,8 @@ usage ()
     echo "    boot [-a] - bootstraps and builds the system (after configure)"
     echo "    release <target_dir> - creates a small release to <target_dir>"
     echo "    release [-a] <target_dir> - creates full release to <target_dir>"
-    echo "    smp [-a] - build an Erlang system, smp flavor only"
+    echo "    smp [-a] - bootstraps and builds the system (after configure) - smp flavor only"
+    echo "    plain [-a] - bootstraps and builds the system (after configure) - plain (i.e. non-smp) flavor only"
     echo "    tests <dir> - Build testsuites to <dir>"
     echo ""
     echo "These are for cleaning up an open source distribution"
@@ -1126,18 +1127,18 @@ do_boot ()
     # Bootstrap if we are cross compiling
     if [ X`$MAKE is_cross_configured` = Xyes ]; then
 	TARGET=$BUILDSYS
-	$MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT CROSS_COMPILING=no TARGET=$TARGET bootstrap || exit 1
+	$MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT CROSS_COMPILING=no TARGET=$TARGET TYPE=$TYPE FLAVOR=$FLAVOR bootstrap || exit 1
 	TARGET=`$MAKE target_configured`
     elif [ "x$OVERRIDE_TARGET" != "x" -a "x$OVERRIDE_TARGET" != "xwin32" ]; then
 	hide_vars OVERRIDE_TARGET TARGET
 	TARGET=$BUILDSYS
-	$MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT TARGET=$TARGET bootstrap || exit 1
+	$MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT TARGET=$TARGET TYPE=$TYPE FLAVOR=$FLAVOR bootstrap || exit 1
 
 	restore_vars OVERRIDE_TARGET TARGET
     fi
 
     # Build it (including bootstrap if not cross compiling)
-    $MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT TARGET=$TARGET all || exit 1
+    $MAKE MAKE="$MAKE" BOOTSTRAP_ROOT=$BOOTSTRAP_ROOT TARGET=$TARGET TYPE=$TYPE FLAVOR=$FLAVOR all || exit 1
 }
 
 do_boot_emu ()
@@ -1348,6 +1349,7 @@ fi
 export OTP_SMALL_BUILD
 
 TYPE=
+FLAVOR=
 case "$1" in
  	all)
  		do_autoconf; 
@@ -1389,9 +1391,7 @@ case "$1" in
 	opt)
 		do_boot;;
 	plain|smp)
-		if [ $minus_a_flag = false ]; then 
-		    TYPE=opt
-		fi;
+		TYPE=opt;
 		FLAVOR=$1
 		do_boot;;
 	update_primary)

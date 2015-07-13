@@ -663,8 +663,7 @@ endif
 
 ifneq ($(filter tile-%,$(TARGET)),)
 $(OBJDIR)/beam_emu.o: beam/beam_emu.c
-	$(V_CC) $(subst -O2, $(GEN_OPT_FLGS), $(CFLAGS)) \
-         $(INCLUDES) -c $< -o $@
+	$(V_CC) $(subst -O2, $(GEN_OPT_FLGS), $(CFLAGS)) $(INCLUDES) -c $< -o $@
 else
 # Usually the same as the default rule, but certain platforms (e.g. win32) mix
 # different compilers

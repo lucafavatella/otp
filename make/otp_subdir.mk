@@ -40,7 +40,7 @@ opt debug release docs release_docs tests release_tests clean depend valgrind st
 		if test ! -d $$d ; then					\
 		    echo "=== Skipping subdir $$d, it is missing" ;	\
 		else							\
-		    (cd $$d && $(MAKE) $@) || exit $$? ;		\
+		    (cd $$d && $(MAKE) FLAVOR=$(FLAVOR) $@) || exit $$? ;	\
 		fi ;							\
 	    fi ;							\
 	done ;								\

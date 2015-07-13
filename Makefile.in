@@ -491,9 +491,9 @@ preloaded:
 
 dep depend:
 	$(make_verbose)
-	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/emulator && ERL_TOP=$(ERL_TOP) $(MAKE) generate)
-	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/emulator && ERL_TOP=$(ERL_TOP) $(MAKE) depend)
-	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/lib_src && ERL_TOP=$(ERL_TOP) $(MAKE) depend)
+	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/emulator && ERL_TOP=$(ERL_TOP) $(MAKE) TYPE=$(TYPE) FLAVOR=$(FLAVOR) generate)
+	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/emulator && ERL_TOP=$(ERL_TOP) $(MAKE) TYPE=$(TYPE) FLAVOR=$(FLAVOR) depend)
+	$(V_at)test X"$$ERTS_SKIP_DEPEND" = X"true" || (cd erts/lib_src && ERL_TOP=$(ERL_TOP) $(MAKE) TYPE=$(TYPE) FLAVOR=$(FLAVOR) depend)
 
 # Creates "erl" and "erlc" in bootstrap/bin which uses the precompiled 
 # libraries in the bootstrap directory
@@ -549,7 +549,7 @@ bootstrap_setup_target:
 secondary_bootstrap_build:
 	$(make_verbose)cd lib && \
 	  ERL_TOP=$(ERL_TOP) PATH=$(BOOT_PREFIX)"$${PATH}" \
-		$(MAKE) opt SECONDARY_BOOTSTRAP=true
+		$(MAKE) opt FLAVOR=$(FLAVOR) SECONDARY_BOOTSTRAP=true
 
 secondary_bootstrap_copy:
 	$(make_verbose)

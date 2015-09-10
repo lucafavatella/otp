@@ -322,7 +322,7 @@ message_to_string({call, [M, F, Args, ArgNs, FailReason,
   io_lib:format("The call ~w:~w~s ", [M, F, Args]) ++
     call_or_apply_to_string(ArgNs, FailReason, SigArgs, SigRet, Contract);
 message_to_string({call_to_missing, [M, F, A]}) ->
-  io_lib:format("Call to missing or unexported function ~w:~w/~w\n", [M, F, A]);
+  io_lib:format("Call to missing or unexported function ~w:~w/~w\n", [M, F, A]); %%
 message_to_string({exact_eq, [Type1, Op, Type2]}) ->
   io_lib:format("The test ~s ~s ~s can never evaluate to 'true'\n",
 		[Type1, Op, Type2]);

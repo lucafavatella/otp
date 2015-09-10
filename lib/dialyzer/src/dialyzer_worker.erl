@@ -41,7 +41,7 @@
 
 -include("dialyzer.hrl").
 
-%% -define(DEBUG, true).
+-define(DEBUG, true).
 
 -ifdef(DEBUG).
 -define(debug(X__, Y__), io:format(X__, Y__)).

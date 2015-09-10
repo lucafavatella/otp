@@ -261,7 +261,7 @@ add_new_type(TypeOrOpaque, Name, TypeForm, ArgForms, Module, FN,
         ArgNames ->
 	  dict:store({TypeOrOpaque, Name, Arity},
                      {{Module, FN, TypeForm, ArgNames},
-                      erl_types:t_any()}, RecDict)
+                      erl_types:t_any()}, RecDict) %% XXX Attribute type initially computes (potentially parametric) type as any().
       catch
         _:_ ->
 	  throw({error, flat_format("Type declaration for ~w does not "

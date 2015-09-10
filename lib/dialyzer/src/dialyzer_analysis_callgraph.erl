@@ -79,7 +79,7 @@ start(Parent, LegalWarnings, Analysis) ->
   Analysis0 =
     Analysis#analysis{race_detection = RacesOn, timing_server = TimingServer},
   Analysis1 = expand_files(Analysis0),
-  Analysis2 = run_analysis(Analysis1, LegalWarnings),
+  Analysis2 = run_analysis(Analysis1, LegalWarnings), %%
   State = #server_state{parent = Parent},
   loop(State, Analysis2, none),
   dialyzer_timing:stop(TimingServer).
@@ -160,7 +160,7 @@ analysis_start(Parent, Analysis, LegalWarnings) ->
            byte_code -> list_to_atom(filename:basename(F, ".beam"));
            src_code -> list_to_atom(filename:basename(F, ".erl"))
          end || F <- Files],
-      OldExpTypes1 = dialyzer_utils:sets_filter(RemMods, OldExpTypes0),
+      OldExpTypes1 = dialyzer_utils:sets_filter(RemMods, OldExpTypes0), %% XXX Types in PLT that are not in modules under analysis (i.e. if same module in PLT and under analysis, prefer the one under analysis).
       MergedExpTypes = sets:union(NewExpTypes, OldExpTypes1),
       TmpCServer1 = dialyzer_codeserver:set_temp_records(MergedRecords, TmpCServer0),
       TmpCServer2 =
@@ -189,7 +189,7 @@ analysis_start(Parent, Analysis, LegalWarnings) ->
       true -> dialyzer_callgraph:put_race_detection(true, Callgraph);
       false -> Callgraph
     end,
-  State2 = analyze_callgraph(NewCallgraph, State1#analysis_state{plt = Plt1}),
+  State2 = analyze_callgraph(NewCallgraph, State1#analysis_state{plt = Plt1}), %% XXX
   dialyzer_callgraph:dispose_race_server(NewCallgraph),
   rcv_and_send_ext_types(Parent),
   NonExports = sets:subtract(sets:from_list(AllNodes), Exports),
@@ -345,24 +345,30 @@ cleanup_callgraph(#analysis_state{plt = InitPlt, parent = Parent,
 		  CServer, Callgraph, Modules) ->
   ModuleDeps = dialyzer_callgraph:module_deps(Callgraph),
   send_mod_deps(Parent, ModuleDeps),
-  {Callgraph1, ExtCalls} = dialyzer_callgraph:remove_external(Callgraph),
+  {Callgraph1, ExtCalls} = dialyzer_callgraph:remove_external(Callgraph), %% Calls to M:F/As not defined in modules under analysis.
+  %erlang:display({'ExtCalls', ExtCalls}), %% {'ExtCalls',[ ..., {{non_existing,t_call,0},{lists,non_existing_call,1}}, {{non_existing,t_fun,0},{erlang,make_fun,3}} ]} - TODO Maybe erlang:make_fun is the only function that has knowledge of non-existing function?
   ExtCalls1 = [Call || Call = {_From, To} <- ExtCalls,
-		       not dialyzer_plt:contains_mfa(InitPlt, To)],
-  {BadCalls1, RealExtCalls} =
+		       not dialyzer_plt:contains_mfa(InitPlt, To)], %% XXX 3.BC1.2.EC1.1 %% External calls - i.e. calls to M:F/As not defined in modules under analysis - not in PLT.
+  {BadCalls1, RealExtCalls} = %% XXX 03.BC1.2
     if ExtCalls1 =:= [] -> {[], []};
        true ->
 	ModuleSet = sets:from_list(Modules),
 	PltModuleSet = dialyzer_plt:all_modules(InitPlt),
 	AllModules = sets:union(ModuleSet, PltModuleSet),
 	Pred = fun({_From, {M, _F, _A}}) -> sets:is_element(M, AllModules) end,
+        %erlang:display({'ExtCalls1', ExtCalls1}), %% [ {{non_existing,t_call,0},{lists,non_existing_call,1}} ]
 	lists:partition(Pred, ExtCalls1)
     end,
-  NonLocalCalls = dialyzer_callgraph:non_local_calls(Callgraph1),
-  BadCalls2 = [Call || Call = {_From, To} <- NonLocalCalls,
-		       not dialyzer_codeserver:is_exported(To, CServer)],
+  NonLocalCalls = dialyzer_callgraph:non_local_calls(Callgraph1), %% XXX 3.BC2.4 - TODO Maybe call of value that is remote fun to undefined m:f/a (all literals) shall be included here? %% Calls from a function in M1 to a function in M2 - reguardless of M:F/As being external or confirmed as existent.
+  %erlang:display({'NonLocalCalls', NonLocalCalls}), %% XXX 3.BC2.3 - []
+  BadCalls2 = [Call || Call = {_From, To} <- NonLocalCalls, %% XXX Calls that are non-local, to functions that are not exported in known modules.
+		       not dialyzer_codeserver:is_exported(To, CServer)], %% XXX 3.BC2.2
   case BadCalls1 ++ BadCalls2 of
     [] -> ok;
-    BadCalls -> send_bad_calls(Parent, BadCalls, CodeServer)
+    BadCalls ->
+      %erlang:display({'BadCalls1', BadCalls1}), %% XXX 3.BC1.1 - [{{non_existing,t_call,0},{lists,non_existing_call,1}}]
+      %erlang:display({'BadCalls2', BadCalls2}), %% XXX 3.BC2.1 - []
+      send_bad_calls(Parent, BadCalls, CodeServer) %% XXX 3
   end,
   if RealExtCalls =:= [] -> ok;
      true ->
@@ -416,6 +422,7 @@ compile_common(File, AbstrCode, CompOpts, Callgraph, CServer,
 	    dialyzer_codeserver:store_temp_records(Mod, RecInfo, CServer),
           MetaFunInfo =
             dialyzer_utils:get_fun_meta_info(Mod, AbstrCode, LegalWarnings),
+          %erlang:display({self(), {?MODULE,?LINE}, start_compilation, "Storing fun meta info (?) calling dialyzer_codeserver:insert_fun_meta_info", {Mod, MetaFunInfo}}), %% XXX Not interesting. Sample {<0.42.0>,{dialyzer_analysis_callgraph,442},start_compilation,"Storing fun meta info (?) calling dialyzer_codeserver:insert_fun_meta_info",{non_existing,[{non_existing,[warn_behaviour,warn_bin_construction,warn_callgraph,warn_contract_range,warn_contract_syntax,warn_contract_types,warn_failing_call,warn_fun_app,warn_matching,warn_non_proper_list,warn_not_called,warn_opaque,warn_return_no_exit,warn_undefined_callbacks]}]}}
           CServer2 =
             dialyzer_codeserver:insert_fun_meta_info(MetaFunInfo, CServer1),
 	  case UseContracts of
@@ -594,7 +601,7 @@ send_codeserver_plt(Parent, CServer, Plt ) ->
   ok.
 
 send_bad_calls(Parent, BadCalls, CodeServer) ->
-  FormatedBadCalls = format_bad_calls(BadCalls, CodeServer, []),
+  FormatedBadCalls = format_bad_calls(BadCalls, CodeServer, []), %% XXX 2
   Warnings = filter_warnings(FormatedBadCalls, CodeServer),
   send_warnings(Parent, Warnings).
 
@@ -607,7 +614,7 @@ format_bad_calls([{{_, _, _}, {_, module_info, A}}|Left], CodeServer, Acc)
   format_bad_calls(Left, CodeServer, Acc);
 format_bad_calls([{FromMFA, {M, F, A} = To}|Left], CodeServer, Acc) ->
   {_Var, FunCode} = dialyzer_codeserver:lookup_mfa_code(FromMFA, CodeServer),
-  Msg = {call_to_missing, [M, F, A]},
+  Msg = {call_to_missing, [M, F, A]}, %% XXX 1
   {File, Line} = find_call_file_and_line(FunCode, To),
   WarningInfo = {File, Line, FromMFA},
   NewAcc = [{?WARN_CALLGRAPH, WarningInfo, Msg}|Acc],

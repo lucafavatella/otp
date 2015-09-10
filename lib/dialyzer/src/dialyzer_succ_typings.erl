@@ -44,7 +44,7 @@
 
 -export_type([typesig_init_data/0, dataflow_init_data/0, warnings_init_data/0]).
 
-%%-define(DEBUG, true).
+-define(DEBUG, true).
 
 -ifdef(DEBUG).
 -define(debug(X__, Y__), io:format(X__, Y__)).
@@ -155,7 +155,7 @@ get_warnings(Callgraph, Plt, DocPlt, Codeserver,
   ModWarns =
     ?timing(TimingServer, "warning",
 	    get_warnings_from_modules(Mods, InitState, MiniDocPlt)),
-  {postprocess_warnings(CWarns ++ ModWarns, Codeserver),
+  {postprocess_warnings(CWarns ++ ModWarns, Codeserver), %% XXX Only first element of return value is relevant.
    dialyzer_plt:restore_full_plt(MiniPlt, Plt),
    dialyzer_plt:restore_full_plt(MiniDocPlt, DocPlt)}.
 
@@ -163,6 +163,8 @@ get_warnings_from_modules(Mods, State, DocPlt) ->
   #st{callgraph = Callgraph, codeserver = Codeserver,
       plt = Plt, timing_server = TimingServer} = State,
   Init = {Codeserver, Callgraph, Plt, DocPlt},
+  %% For each module call collect_warnings/2, and aggregate
+  %% concatenating results.
   dialyzer_coordinator:parallel_job(warnings, Mods, Init, TimingServer).
 
 -spec collect_warnings(module(), warnings_init_data()) -> [raw_warning()].
@@ -340,6 +342,11 @@ find_succ_typings(SCCs, #st{codeserver = Codeserver, callgraph = Callgraph,
   Init = {Codeserver, Callgraph, Plt, Solvers},
   NotFixpoint =
     ?timing(Timing, "typesig",
+            %% XXX For each SCC: find SCCs "depends_on" (SCCs that it
+            %% calls to?) calling find_depends_on, wait for
+            %% success_typings from each SCC, call
+            %% find_succ_types_for_scc/2. Then aggregate (calling
+            %% lookup_names/2 and) concatenating.
 	    dialyzer_coordinator:parallel_job(typesig, SCCs, Init, Timing)),
   ?debug("==================== Typesig done ====================\n\n", []),
   case NotFixpoint =:= [] of

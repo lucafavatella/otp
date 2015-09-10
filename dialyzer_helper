@@ -1,0 +1,18 @@
+#!/bin/sh -e
+
+set -x
+
+export ERL_TOP=`pwd`
+
+./otp_build setup ## -a
+PATH=$ERL_TOP/bin:$PATH make -C lib/xmerl opt ## dialyzer test uses xmerl
+PATH=$ERL_TOP/bin:$PATH make -C lib/dialyzer opt ## Execute this for recompiling only Dialyzer.
+
+export TESTROOT=$ERL_TOP/release/tests
+make -C $ERL_TOP/lib/test_server release_tests
+PATH=$ERL_TOP/bin:$PATH make -C lib/dialyzer/test release_tests
+
+(cd $TESTROOT/test_server && PATH=$ERL_TOP/bin:$PATH erl -noshell -s ts install -s init stop)
+(cd $TESTROOT/test_server && PATH=$ERL_TOP/bin:$PATH erl -noshell -s ts run dialyzer -s init stop) ## Run all Dialyzer tests.
+#(cd $TESTROOT/test_server && PATH=$ERL_TOP/bin:$PATH erl -noshell -eval 'ts:run(dialyzer, small_SUITE, non_existing, [batch]), halt().') ## Run only the relevant Dialyzer test.
+ls -ltr $TESTROOT/test_server/ct_run.test_server@*/tests.dialyzer_test.logs/run.*/suite.summary

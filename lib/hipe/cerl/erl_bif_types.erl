@@ -126,7 +126,7 @@
 
 %%=============================================================================
 
--spec type(atom(), atom(), arity()) -> erl_types:erl_type().
+-spec type(module(), atom(), arity()) -> erl_types:erl_type().
 
 type(M, F, A) ->
   type(M, F, A, any_list(A), []).

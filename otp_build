@@ -1386,8 +1386,6 @@ case "$1" in
 	lazy_configure_target_clean)
 		shift;
 		do_lazy_configure_target_clean;;
-	opt)
-		do_boot;;
 	plain|smp)
 		if [ $minus_a_flag = false ]; then 
 		    TYPE=opt

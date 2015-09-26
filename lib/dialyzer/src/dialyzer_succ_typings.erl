@@ -381,8 +381,8 @@ find_succ_types_for_scc(SCC, {Codeserver, Callgraph, Plt, Solvers}) ->
   PltContracts =
     dialyzer_contracts:check_contracts(Contracts3, Callgraph,
                                        DecoratedFunTypes, FindOpaques),
-  %% ?debug("FilteredFunTypes ~p\n   ~n", [dict:to_list(FilteredFunTypes)]),
-  %% ?debug("SCC DecoratedFunTypes ~p\n   ~n", [dict:to_list(DecoratedFunTypes)]),
+  ?debug("FilteredFunTypes ~p\n   ~n", [dict:to_list(FilteredFunTypes)]),
+  ?debug("SCC DecoratedFunTypes ~p\n   ~n", [dict:to_list(DecoratedFunTypes)]),
   debug_pp_functions("SCC", FilteredFunTypes, DecoratedFunTypes, Callgraph),
   ContractFixpoint =
     lists:all(fun({MFA, _C}) ->

@@ -351,7 +351,7 @@ find_succ_typings(SCCs, #st{codeserver = Codeserver, callgraph = Callgraph,
 
 find_succ_types_for_scc(SCC, {Codeserver, Callgraph, Plt, Solvers}) ->
   SCC_Info = [{MFA, 
-	       dialyzer_codeserver:lookup_mfa_code(MFA, Codeserver),
+	       {_Var, _Fun} = dialyzer_codeserver:lookup_mfa_code(MFA, Codeserver),
 	       dialyzer_codeserver:lookup_mod_records(M, Codeserver)}
 	      || {M, _, _} = MFA <- SCC],
   Contracts1 = [{MFA, dialyzer_codeserver:lookup_mfa_contract(MFA, Codeserver)}

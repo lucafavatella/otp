@@ -56,7 +56,11 @@ groups() ->
 		       lib_no_match
 		      ]},
      {kex, [], [no_common_alg_server_disconnects,
-		no_common_alg_client_disconnects
+		no_common_alg_client_disconnects,
+		gex_client_init_default_noexact,
+		gex_client_init_default_exact,
+		gex_client_init_option_groups,
+		gex_client_init_option_groups_file
 		]}
     ].
 
@@ -68,12 +72,39 @@ end_per_suite(Config) ->
     stop_apps(Config).
 
 
+
+init_per_testcase(no_common_alg_server_disconnects, Config) ->
+    start_std_daemon(Config, [{preferred_algorithms,[{public_key,['ssh-rsa']}]}]);
+
+init_per_testcase(TC, Config) when TC == gex_client_init_default_noexact ;
+				   TC == gex_client_init_default_exact ;
+				   TC == gex_client_init_option_groups ;
+				   TC == gex_client_init_option_groups_file ->
+    Opts = case TC of
+	       gex_client_init_option_groups ->
+		   [{dh_gex_groups, [{2345, 3, 41}]}];
+	       gex_client_init_option_groups_file ->
+		   DataDir = ?config(data_dir, Config),
+		   F = filename:join(DataDir, "dh_group_test"),
+		   [{dh_gex_groups, {file,F}}];
+	       _ ->
+		   []
+	   end,
+    start_std_daemon(Config,
+		     [{preferred_algorithms, ssh_transport:supported_algorithms()}
+		      | Opts]);
 init_per_testcase(_TestCase, Config) ->
     check_std_daemon_works(Config, ?LINE).
 
+end_per_testcase(no_common_alg_server_disconnects, Config) ->
+    stop_std_daemon(Config);
+end_per_testcase(TC, Config) when TC == gex_client_init_default_noexact ;
+				  TC == gex_client_init_default_exact ;
+				  TC == gex_client_init_option_groups ;
+				  TC == gex_client_init_option_groups_file ->
+    stop_std_daemon(Config);
 end_per_testcase(_TestCase, Config) ->
     check_std_daemon_works(Config, ?LINE).
-
 
 %%%--------------------------------------------------------------------
 %%% Test Cases --------------------------------------------------------
@@ -88,7 +119,8 @@ lib_works_as_client(Config) ->
 	  [{set_options, [print_ops, print_seqnums, print_messages]},
 	   {connect,
 	    server_host(Config),server_port(Config),
-	    [{silently_accept_hosts, true},
+	    [{preferred_algorithms,[{kex,['diffie-hellman-group1-sha1']}]},
+	     {silently_accept_hosts, true},
 	     {user_dir, user_dir(Config)},
 	     {user_interaction, false}]},
 	   receive_hello,
@@ -180,7 +212,9 @@ lib_works_as_server(Config) ->
       end),
 
     %% and finally connect to it with a regular Erlang SSH client:
-    {ok,_} = std_connect(HostPort, Config).
+    {ok,_} = std_connect(HostPort, Config, 
+			 [{preferred_algorithms,[{kex,['diffie-hellman-group1-sha1']}]}]
+			).
 
 %%--------------------------------------------------------------------
 %%% Matching
@@ -213,7 +247,7 @@ lib_no_match(_Config) ->
 no_common_alg_server_disconnects(Config) ->
     {ok,_} =
 	ssh_trpt_test_lib:exec(
-	  [{set_options, [print_ops, print_seqnums, print_messages]},
+	  [{set_options, [print_ops, {print_messages,detail}]},
 	   {connect,
 	    server_host(Config),server_port(Config),
 	    [{silently_accept_hosts, true},
@@ -224,7 +258,7 @@ no_common_alg_server_disconnects(Config) ->
 	   receive_hello,
 	   {send, hello},
 	   {match, #ssh_msg_kexinit{_='_'}, receive_msg},
-	   {send, ssh_msg_kexinit},
+	   {send, ssh_msg_kexinit},  % with server unsupported 'ssh-dss' !
 	   {match,
 	    {'or',[#ssh_msg_disconnect{code = ?SSH_DISCONNECT_KEY_EXCHANGE_FAILED,  _='_'},
                   tcp_closed]},
@@ -248,17 +282,16 @@ no_common_alg_client_disconnects(Config) ->
 		  Parent !
 		      {result,self(),
 		       ssh_trpt_test_lib:exec(
-			 [{set_options, [print_ops, print_messages]},
+			 [{set_options, [print_ops, {print_messages,detail}]},
 			  {accept, [{system_dir, system_dir(Config)},
 				    {user_dir, user_dir(Config)}]},
 			  receive_hello,
 			  {send, hello},
-
 			  {match, #ssh_msg_kexinit{_='_'}, receive_msg},
-			  {send,  #ssh_msg_kexinit{
+			  {send,  #ssh_msg_kexinit{ % with unsupported "SOME-UNSUPPORTED"
 				     cookie = 247381486335508958743193106082599558706,
 				     kex_algorithms = ["diffie-hellman-group1-sha1"],
-				     server_host_key_algorithms = ["some-unknown"],
+				     server_host_key_algorithms = ["SOME-UNSUPPORTED"],  % SIC!
 				     encryption_algorithms_client_to_server = ["aes128-ctr"],
 				     encryption_algorithms_server_to_client = ["aes128-ctr"],
 				     mac_algorithms_client_to_server = ["hmac-sha2-256"],
@@ -279,7 +312,8 @@ no_common_alg_client_disconnects(Config) ->
 		      }
 	  end),
 
-    %% and finally connect to it with a regular Erlang SSH client:
+    %% and finally connect to it with a regular Erlang SSH client
+    %% which of course does not support SOME-UNSUPPORTED as pub key algo:
     Result = std_connect(HostPort, Config, [{preferred_algorithms,[{public_key,['ssh-dss']}]}]),
     ct:log("Result of connect is ~p",[Result]),
 
@@ -287,11 +321,57 @@ no_common_alg_client_disconnects(Config) ->
 	{result,Pid,{ok,_}} -> 
 	    ok;
 	{result,Pid,{error,{Op,ExecResult,S}}} ->
-	    ct:pal("ERROR!~nOp = ~p~nExecResult = ~p~nState =~n~s",
+	    ct:log("ERROR!~nOp = ~p~nExecResult = ~p~nState =~n~s",
 		   [Op,ExecResult,ssh_trpt_test_lib:format_msg(S)]),
 	    {fail, ExecResult};
-	X -> ct:fail(X)
+	X -> 
+	    ct:log("¤¤¤¤¤"),
+	    ct:fail(X)
     end.
+
+%%%--------------------------------------------------------------------
+gex_client_init_default_noexact(Config) ->
+    do_gex_client_init(Config, {2000, 3000, 4000},
+		       %% Warning, app knowledege:
+		       ?dh_group15).
+
+
+gex_client_init_default_exact(Config) ->
+    do_gex_client_init(Config, {2000, 2048, 4000},
+		       %% Warning, app knowledege:
+		       ?dh_group14).
+
+
+gex_client_init_option_groups(Config) ->
+    do_gex_client_init(Config, {2000, 2048, 4000}, 
+		       {'n/a',{3,41}}).
+
+
+gex_client_init_option_groups_file(Config) ->
+    do_gex_client_init(Config, {2000, 2048, 4000},
+		       {'n/a',{5,61}}).
+
+do_gex_client_init(Config, {Min,N,Max}, {_,{G,P}}) ->
+    {ok,_} =
+	ssh_trpt_test_lib:exec(
+	  [{set_options, [print_ops, print_seqnums, print_messages]},
+	   {connect,
+	    server_host(Config),server_port(Config),
+	    [{silently_accept_hosts, true},
+	     {user_dir, user_dir(Config)},
+	     {user_interaction, false},
+	     {preferred_algorithms,[{kex,['diffie-hellman-group-exchange-sha1']}]}
+	    ]},
+	   receive_hello,
+	   {send, hello},
+	   {send, ssh_msg_kexinit},
+	   {match, #ssh_msg_kexinit{_='_'}, receive_msg},
+	   {send, #ssh_msg_kex_dh_gex_request{min = Min, 
+					      n = N,
+					      max = Max}},
+	   {match, #ssh_msg_kex_dh_gex_group{p=P, g=G, _='_'},  receive_msg}
+	  ]
+	 ).
 
 %%%================================================================
 %%%==== Internal functions ========================================
@@ -338,8 +418,9 @@ start_std_daemon(Config, ExtraOpts) ->
     UserDir = filename:join(PrivDir, nopubkey), % to make sure we don't use public-key-auth
     file:make_dir(UserDir),
     UserPasswords = [{"user1","pwd1"}],
-    Options = [{system_dir, system_dir(Config)},
-	       {user_dir, user_dir(Config)},
+    Options = [%%{preferred_algorithms,[{public_key,['ssh-rsa']}]}, %% For some test cases
+	       {system_dir, system_dir(Config)},
+	       {user_dir, UserDir},
 	       {user_passwords, UserPasswords},
 	       {failfun, fun ssh_test_lib:failfun/2}
 	       | ExtraOpts],
@@ -353,6 +434,7 @@ stop_std_daemon(Config) ->
     ct:log("Std server ~p at ~p:~p stopped", [server_pid(Config), server_host(Config), server_port(Config)]),
     lists:keydelete(server, 1, Config).
 
+
 check_std_daemon_works(Config, Line) ->
     case std_connect(Config) of
 	{ok,C} ->
@@ -362,13 +444,9 @@ check_std_daemon_works(Config, Line) ->
 	    ok = ssh:close(C),
 	    Config;
 	Error = {error,_} ->
-	    {fail,
-	     lists:flatten(
-	       io_lib:format("Standard server ~p:~p ~p is ill at line ~p: ~p",
-			     [server_host(Config), server_port(Config), 
-			      server_pid(Config), Line, Error])
-	      )
-	    }
+	    ct:fail("Standard server ~p:~p ~p is ill at line ~p: ~p",
+		    [server_host(Config), server_port(Config), 
+		     server_pid(Config), Line, Error])
     end.
 
 server_pid(Config)  -> element(1,?v(server,Config)).
@@ -381,24 +459,24 @@ server_user_password(N, Config) -> lists:nth(N, ?v(user_passwords,Config)).
     
 
 std_connect(Config) -> 
-    {User,Pwd} = server_user_password(Config),
-    std_connect(server_host(Config), server_port(Config),
-		Config,
-		[{user,User},{password,Pwd}]).
+    std_connect({server_host(Config), server_port(Config)}, Config).
     
 std_connect({Host,Port}, Config) ->
-    {User,Pwd} = server_user_password(Config),
-    std_connect(Host, Port, Config, [{user,User},{password,Pwd}]).
+    std_connect({Host,Port}, Config, []).
 
 std_connect({Host,Port}, Config, Opts) ->
     std_connect(Host, Port, Config, Opts).
 
 std_connect(Host, Port, Config, Opts) ->
+    {User,Pwd} = server_user_password(Config),
     ssh:connect(Host, Port, 
-		[{silently_accept_hosts, true},
-		 {user_dir, user_dir(Config)},
-		 {user_interaction, false} | Opts],
+		%% Prefere User's Opts to the default opts
+		[O || O = {Tag,_} <- [{user,User},{password,Pwd},
+				      {silently_accept_hosts, true},
+				      {user_dir, user_dir(Config)},
+				      {user_interaction, false}],
+		      not lists:keymember(Tag, 1, Opts)
+		] ++ Opts,
 		30000).
     
-
 %%%----------------------------------------------------------------	

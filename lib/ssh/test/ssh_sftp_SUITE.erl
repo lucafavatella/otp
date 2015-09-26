@@ -27,7 +27,7 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("kernel/include/file.hrl").
 
-% Default timetrap timeout
+						% Default timetrap timeout
 -define(default_timeout, ?t:minutes(1)).
 
 %%--------------------------------------------------------------------
@@ -47,7 +47,7 @@ init_per_suite(Config) ->
     catch crypto:stop(),
     case (catch crypto:start()) of
 	ok ->
-	    ct:pal("file:native_name_encoding() = ~p,~nio:getopts() = ~p",
+	    ct:log("file:native_name_encoding() = ~p,~nio:getopts() = ~p",
 		   [file:native_name_encoding(),io:getopts()]),
 	    ssh:start(),
 	    Config;
@@ -69,7 +69,7 @@ groups() ->
      {unicode, [], [{group,erlang_server},
 		    {group,openssh_server},
 		    sftp_nonexistent_subsystem]},
-     
+
      {erlang_server, [], [{group,write_read_tests},
 			  version_option,
 			  {group,remote_tar}]},
@@ -77,7 +77,12 @@ groups() ->
      {openssh_server, [], [{group,write_read_tests},
 			   {group,remote_tar}]},
 
-     {remote_tar, [], [create_empty_tar, files_to_tar, big_file_to_tar, files_chunked_to_tar,
+     {remote_tar, [], [create_empty_tar, 
+		       ascii_filename_ascii_contents_to_tar,
+		       ascii_filename_unicode_contents_to_tar,
+		       unicode_filename_ascii_contents_to_tar,
+		       files_to_tar,
+		       big_file_to_tar, files_chunked_to_tar,
 		       directory_to_tar, binaries_to_tar, null_crypto_tar, 
 		       simple_crypto_tar_small, simple_crypto_tar_big,
 		       read_tar, read_null_crypto_tar, read_crypto_tar, 
@@ -113,28 +118,40 @@ init_per_group(unicode, Config) ->
 	    ct:comment("Begin ~p",[grps(Config)]),
 	    DataDir = ?config(data_dir, Config),
 	    PrivDir = ?config(priv_dir, Config),
-	    [{user, "åke高兴"},
-	     {passwd, "ärlig日本じん"},
-	     {data, <<"foobar å 一二三四いちにさんち">>},
-	     {filename, filename:join(PrivDir, "sftp瑞点.txt")},
-	     {testfile, filename:join(PrivDir, "testハンス.txt")},
-	     {linktest, filename:join(PrivDir, "link_test語.txt")},
-	     {tar_filename, filename:join(PrivDir,  "sftp_tar_test一二三.tar")},
-	     {tar_F1_txt, "F一.txt"},
-	     {datadir_tar, filename:join(DataDir,"sftp_tar_test_data_高兴")}
-	     | lists:foldl(fun(K,Cf) -> lists:keydelete(K,1,Cf) end, 
-			   Config,
-			   [user, passwd, data,
-			    filename, testfile, linktest,
-			    tar_filename, tar_F1_txt, datadir_tar
-			   ]
-			  )
-	    ];
+	    NewConfig =
+		[{user, "åke高兴"},
+		 {passwd, "ärlig日本じん"},
+		 {data, <<"foobar å 一二三四いちにさんち">>},
+		 {filename, filename:join(PrivDir, "sftp瑞点.txt")},
+		 {testfile, filename:join(PrivDir, "testハンス.txt")},
+		 {linktest, filename:join(PrivDir, "link_test語.txt")},
+		 {tar_filename, filename:join(PrivDir,  "sftp_tar_test一二三.tar")},
+		 {tar_F1_txt, "F一.txt"},
+		 {tar_F3_txt, "f3.txt"},
+		 {tar_F4_txt, "g四.txt"},
+		 {datadir_tar, filename:join(DataDir,"sftp_tar_test_data_高兴")}
+		 | lists:foldl(fun(K,Cf) -> lists:keydelete(K,1,Cf) end, 
+			       Config,
+			       [user, passwd, data,
+				filename, testfile, linktest,
+				tar_filename, tar_F1_txt, datadir_tar
+			       ]
+			      )
+		],
+	    FN = fn(?config(tar_F1_txt,NewConfig), NewConfig),
+	    case catch file:read_file(FN) of
+		{ok,FN_contents} ->
+		    ct:log("Readable file:read_file(~tp) ->~n~tp",[FN,FN_contents]),
+		    NewConfig;
+		Other ->
+		    ct:log("Unreadable file:read_file(~tp) ->~n~p",[FN,Other]),
+		    {skip, "Not unicode file reading"}
+	    end;
 
 	_ ->
 	    {skip, "Not unicode file encoding"}
     end;
-		
+
 init_per_group(erlang_server, Config) ->
     ct:comment("Begin ~p",[grps(Config)]),
     PrivDir = ?config(priv_dir, Config),
@@ -151,13 +168,15 @@ init_per_group(erlang_server, Config) ->
 init_per_group(openssh_server, Config) ->
     ct:comment("Begin ~p",[grps(Config)]),
     Host = ssh_test_lib:hostname(),
-    case (catch ssh_sftp:start_channel(Host,					      
+    case (catch ssh_sftp:start_channel(Host,
 				       [{user_interaction, false},
 					{silently_accept_hosts, true}])) of
 	{ok, _ChannelPid, Connection} ->
 	    [{peer, {_HostName,{IPx,Portx}}}] = ssh:connection_info(Connection,[peer]),
 	    ssh:close(Connection),
 	    [{peer, {fmt_host(IPx),Portx}}, {group, openssh_server} | Config];
+	{error,"Key exchange failed"} ->
+	    {skip, "openssh server doesn't support the tested kex algorithm"};
 	_ ->
 	    {skip, "No openssh server"} 
     end;
@@ -193,7 +212,6 @@ grps(Config) ->
       name, 
       lists:flatten([proplists:get_value(tc_group_properties,Config,[]),
 		     proplists:get_value(tc_group_path,Config,[])])).
-
 
 end_per_group(erlang_server, Config) ->
     ct:comment("End ~p",[grps(Config)]),
@@ -239,7 +257,7 @@ init_per_testcase(Case, Config0) ->
     prep(Config0),
     Config1 = lists:keydelete(watchdog, 1, Config0),
     Config2 = lists:keydelete(sftp, 1, Config1),
-    Dog = ct:timetrap(?default_timeout),
+    Dog = ct:timetrap(2 * ?default_timeout),
     User = ?config(user, Config0),
     Passwd = ?config(passwd, Config0),
 
@@ -252,7 +270,8 @@ init_per_testcase(Case, Config0) ->
 					   [{user, User},
 					    {password, Passwd},
 					    {user_interaction, false},
-					    {silently_accept_hosts, true}]),
+					    {silently_accept_hosts, true}]
+					  ),
 		Sftp = {ChannelPid, Connection},
 		[{sftp, Sftp}, {watchdog, Dog} | Config2];
 	    openssh_server when Case == links ->
@@ -342,7 +361,7 @@ read_dir(Config) when is_list(Config) ->
     PrivDir = ?config(priv_dir, Config),
     {Sftp, _} = ?config(sftp, Config),
     {ok, Files} = ssh_sftp:list_dir(Sftp, PrivDir),
-    ct:pal("sftp list dir: ~p~n", [Files]).
+    ct:log("sftp list dir: ~p~n", [Files]).
 
 %%--------------------------------------------------------------------
 write_file() ->
@@ -423,12 +442,12 @@ rename_file(Config) when is_list(Config) ->
 
     {Sftp, _} = ?config(sftp, Config),
     {ok, Files} = ssh_sftp:list_dir(Sftp, PrivDir),
-    ct:pal("FileName: ~p, Files: ~p~n", [FileName, Files]),
+    ct:log("FileName: ~p, Files: ~p~n", [FileName, Files]),
     true = lists:member(filename:basename(FileName), Files),
     false = lists:member(filename:basename(NewFileName), Files),
     ok = ssh_sftp:rename(Sftp, FileName, NewFileName),
     {ok, NewFiles} = ssh_sftp:list_dir(Sftp, PrivDir),
-    ct:pal("FileName: ~p, Files: ~p~n", [FileName, NewFiles]),
+    ct:log("FileName: ~p, Files: ~p~n", [FileName, NewFiles]),
 
     false = lists:member(filename:basename(FileName), NewFiles),
     true = lists:member(filename:basename(NewFileName), NewFiles).
@@ -439,7 +458,7 @@ mk_rm_dir() ->
 mk_rm_dir(Config) when is_list(Config) ->
     PrivDir = ?config(priv_dir, Config),
     {Sftp, _} = ?config(sftp, Config),
- 
+
     DirName = filename:join(PrivDir, "test"),
     ok = ssh_sftp:make_dir(Sftp, DirName),
     ok = ssh_sftp:del_dir(Sftp, DirName),
@@ -474,7 +493,7 @@ retrieve_attributes(Config) when is_list(Config) ->
     {ok, NewFileInfo} = file:read_file_info(FileName),
 
     %% TODO comparison. There are some differences now is that ok?
-    ct:pal("SFTP: ~p   FILE: ~p~n", [FileInfo, NewFileInfo]).
+    ct:log("SFTP: ~p   FILE: ~p~n", [FileInfo, NewFileInfo]).
 
 %%--------------------------------------------------------------------
 set_attributes() ->
@@ -503,7 +522,7 @@ async_read(Config) when is_list(Config) ->
 
     receive
 	{async_reply, Ref, {ok, Data}} ->
-	    ct:pal("Data: ~p~n", [Data]),
+	    ct:log("Data: ~p~n", [Data]),
 	    ok;
 	Msg ->
 	    ct:fail(Msg)
@@ -648,6 +667,43 @@ files_to_tar(Config) ->
     chk_tar([F1, "f2.txt"], Config).
 
 %%--------------------------------------------------------------------
+ascii_filename_ascii_contents_to_tar(Config) ->
+    ChPid2 = ?config(channel_pid2, Config),
+    TarFileName = ?config(tar_filename, Config),
+    {ok,Handle} = ssh_sftp:open_tar(ChPid2, TarFileName, [write]),
+    ok = erl_tar:add(Handle, fn("f2.txt",Config), "f2.txt", [verbose]),
+    ok = erl_tar:close(Handle),
+    chk_tar(["f2.txt"], Config).
+
+%%--------------------------------------------------------------------
+ascii_filename_unicode_contents_to_tar(Config) ->
+    case ?config(tar_F3_txt, Config) of
+	undefined ->
+	    {skip, "Unicode test"};
+	Fn ->
+	    ChPid2 = ?config(channel_pid2, Config),
+	    TarFileName = ?config(tar_filename, Config),
+	    {ok,Handle} = ssh_sftp:open_tar(ChPid2, TarFileName, [write]),
+	    ok = erl_tar:add(Handle, fn(Fn,Config), Fn, [verbose]),
+	    ok = erl_tar:close(Handle),
+	    chk_tar([Fn], Config)
+    end.
+
+%%--------------------------------------------------------------------
+unicode_filename_ascii_contents_to_tar(Config) ->
+    case ?config(tar_F4_txt, Config) of
+	undefined ->
+	    {skip, "Unicode test"};
+	Fn ->
+	    ChPid2 = ?config(channel_pid2, Config),
+	    TarFileName = ?config(tar_filename, Config),
+	    {ok,Handle} = ssh_sftp:open_tar(ChPid2, TarFileName, [write]),
+	    ok = erl_tar:add(Handle, fn(Fn,Config), Fn, [verbose]),
+	    ok = erl_tar:close(Handle),
+	    chk_tar([Fn], Config)
+    end.
+
+%%--------------------------------------------------------------------
 big_file_to_tar(Config) ->
     ChPid2 = ?config(channel_pid2, Config),
     TarFileName = ?config(tar_filename, Config),
@@ -675,7 +731,7 @@ directory_to_tar(Config) ->
     ok = erl_tar:add(Handle, fn("d1",Config), "d1", [verbose]),
     ok = erl_tar:close(Handle),
     chk_tar(["d1"], Config).
-    
+
 %%--------------------------------------------------------------------
 binaries_to_tar(Config) ->
     ChPid2 = ?config(channel_pid2, Config),
@@ -739,9 +795,9 @@ simple_crypto_tar_big(Config) ->
     chk_tar([{"b1",Bin}, F1, "big.txt"], Config, [{crypto,{Cinit,Cdec}}]).
 
 stuff(Bin) -> << <<C,C>> || <<C>> <= Bin >>.
-    
+
 unstuff(Bin) -> << <<C>> || <<C,C>> <= Bin >>.
-     
+
 %%--------------------------------------------------------------------
 read_tar(Config) ->
     ChPid2 = ?config(channel_pid2, Config),
@@ -910,8 +966,6 @@ prep(Config) ->
     ok = file:write_file_info(TestFile,
 			      FileInfo#file_info{mode = Mode}).
 
-
-
 chk_tar(Items, Config) ->
     chk_tar(Items, Config, []).
 
@@ -948,7 +1002,7 @@ analyze_report([E={NameE,BinE}|Es], [A={NameA,BinA}|As]) ->
 	NameE < NameA ->
 	    [["Component ",NameE," is missing.\n\n"]
 	     | analyze_report(Es,[A|As])];
-	
+
 	NameE > NameA ->
 	    [["Component ",NameA," is not expected.\n\n"]
 	     | analyze_report([E|Es],As)];
@@ -961,7 +1015,7 @@ analyze_report([], [{NameA,_BinA}|As]) ->
     [["Component ",NameA," not expected.\n\n"] | analyze_report([],As)];
 analyze_report([], []) ->
     "".
-	
+
 tar_size(TarFileName, Config) ->
     {ChPid,_} = ?config(sftp,Config),
     {ok,Data} = ssh_sftp:read_file(ChPid, TarFileName),
@@ -995,4 +1049,4 @@ fn(Name, Config) ->
 
 fmt_host({A,B,C,D}) -> lists:concat([A,".",B,".",C,".",D]);
 fmt_host(S) -> S.
-    
+

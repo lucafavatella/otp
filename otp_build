@@ -1386,16 +1386,11 @@ case "$1" in
 	lazy_configure_target_clean)
 		shift;
 		do_lazy_configure_target_clean;;
-	opt)
-		do_boot;;
 	plain|smp)
 		if [ $minus_a_flag = false ]; then 
 		    TYPE=opt
 		fi;
 		FLAVOR=$1
-		if [ $FLAVOR = opt ]; then
-		    FLAVOR=plain
-		fi
 		do_boot;;
 	update_primary)
 		case $version_controller in

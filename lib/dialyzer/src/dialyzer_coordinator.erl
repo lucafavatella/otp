@@ -170,7 +170,7 @@ update_result(Mode, InitData, Job, Data, Result) ->
       dialyzer_analysis_callgraph:add_to_result(Job, Data, Result,
 						InitData);
     X when X =:= 'typesig'; X =:= 'dataflow' ->
-      dialyzer_succ_typings:lookup_names(Data, InitData) ++ Result;
+      Data ++ Result;
     'warnings' ->
       Data ++ Result
   end.

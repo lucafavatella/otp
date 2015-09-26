@@ -120,7 +120,9 @@ loop(running, #state{mode = Mode} = State) when
                                                 State#state.init_data)
     end,
   ok = broadcast_done(State),
-  report_to_coordinator(NotFixpoint, State).
+  Result = dialyzer_succ_typings:lookup_names(NotFixpoint,
+                                              State#state.init_data),
+  report_to_coordinator(Result, State).
 
 broadcast_done(#state{job = SCC, init_data = InitData,
 		      coordinator = Coordinator}) ->

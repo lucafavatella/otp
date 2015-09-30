@@ -163,6 +163,8 @@ get_warnings_from_modules(Mods, State, DocPlt) ->
   #st{callgraph = Callgraph, codeserver = Codeserver,
       plt = Plt, timing_server = TimingServer} = State,
   Init = {Codeserver, Callgraph, Plt, DocPlt},
+  %% For each module call collect_warnings/2, and aggregate
+  %% concatenating results.
   dialyzer_coordinator:parallel_job(warnings, Mods, Init, TimingServer).
 
 -spec collect_warnings(module(), warnings_init_data()) -> [raw_warning()].
@@ -340,6 +342,10 @@ find_succ_typings(SCCs, #st{codeserver = Codeserver, callgraph = Callgraph,
   Init = {Codeserver, Callgraph, Plt, Solvers},
   NotFixpoint =
     ?timing(Timing, "typesig",
+            %% For each SCC: find SCCs the current SCC depend on
+            %% calling find_depends_on, wait for success_typings from
+            %% each SCC, call find_succ_types_for_scc/2. Then
+            %% aggregate (calling lookup_names/2 and) concatenating.
 	    dialyzer_coordinator:parallel_job(typesig, SCCs, Init, Timing)),
   ?debug("==================== Typesig done ====================\n\n", []),
   case NotFixpoint =:= [] of

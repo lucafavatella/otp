@@ -442,9 +442,10 @@ name_edges(Edges, ETSNameMap) ->
   %% If a label is present in the name map it is renamed. Otherwise
   %% keep the label as the identity.
   MapFun = fun(X) ->
-	       case ets_lookup_dict(X, ETSNameMap) of
-		 error -> X;
-		 {ok, MFA} -> MFA
+	       case {ets_lookup_dict(X, ETSNameMap), X} of
+		 %error -> X;
+                 {error, top} -> X;
+		 {{ok, MFA}, _} -> MFA
 	       end
 	   end,
   name_edges(Edges, MapFun, []).

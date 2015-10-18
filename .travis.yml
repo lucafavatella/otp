@@ -20,6 +20,15 @@ addons:
       - g++
       - xsltproc
 
+env:
+  - JOB_CMD="./otp_build all -a"
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build boot  -a && ./otp_build release -a"
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build boot     && ./otp_build release   "
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build plain -a && ./otp_build release -a"
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build plain    && ./otp_build release   "
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build smp   -a && ./otp_build release -a"
+  - JOB_CMD="./otp_build autoconf && ./otp_build configure && ./otp_build smp      && ./otp_build release   "
+
 before_script:
   - set -e
   - export ERL_TOP=$PWD
@@ -29,9 +38,11 @@ before_script:
   - kerl_deactivate
 
 script:
-  - ./otp_build all -a
+  - eval "$JOB_CMD"
   
 after_success:
+  - find . -type f -name 'beam'
+  - find . -type f -name 'beam.smp'
   - ./otp_build tests && make release_docs
 
 after_script:

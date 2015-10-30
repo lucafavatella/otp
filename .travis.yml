@@ -45,7 +45,7 @@ after_script:
   - cat "$TESTROOT"/test_server/index.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
   - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.log.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
   ## Dialyze OTP...
-  - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; dialyze_otp "dummy.plt"; set +x;; *) true;; esac
+  - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; travis_wait dialyze_otp "dummy.plt"; set +x;; *) true;; esac
 notifications:
   email: false
 matrix:

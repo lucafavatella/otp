@@ -14,7 +14,7 @@ before_script:
   - mk_app_and_deps() { local A="${1:?}"; local T="${2:?}"; local F="${3:?}"; mk_app "$A" "$T" "$F"; local AA=$(ls "$A"/ebin/*.app) && for AD in $(get_app_deps "$AA"); do mk_app "lib/$AD" "$T" "$F"; done; }
   - print_test_specs() { erl -noshell -eval 'Ts = ts:tests(), io:format("ts:tests() found ~p test(s):~n\t~1000p~n\t~1000p (sorted)~n", [length(Ts), Ts, lists:sort(Ts)]), init:stop().'; }
   - build_dummy_plt() { local M="dummy"; printf "\055module($M).\n-export([f/0]).\nf() -> ok.\n" > "$M.erl"; erlc +debug_info "$M.erl"; dialyzer --build_plt --output_plt "${1:?}" "$M.beam"; }
-  - dialyze_otp() { ./otp_build "$BOOT" && { local P="${1:?}"; dialyzer --plt "$P" -Wno_improper_lists erts/*/ebin || true; dialyzer --plt "$P" -Wno_improper_lists erts/*/ebin lib/*/ebin || true; dialyzer --plt "$P" bootstrap/lib/*/ebin || true; }; ./otp_build "$BOOT" -a && { local P="${1:?}"; dialyzer --plt "$P" -Wno_improper_lists erts/*/ebin || true; dialyzer --plt "$P" -Wno_improper_lists erts/*/ebin lib/*/ebin || true; }; }
+  - dialyze_otp() { ./otp_build "$BOOT" -a && { local P="${1:?}"; dialyzer --plt "$P" -Wno_improper_lists --statistics erts/*/ebin lib/*/ebin || true; dialyzer --plt "$P" -Wno_improper_lists erts/*/ebin; }; }
 script:
   ## Compile code, running a more granular version of 'otp_build setup -a'...
   - ./otp_build autoconf

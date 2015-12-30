@@ -422,7 +422,7 @@ static ERTS_INLINE void call_async_ready(ErtsAsync *a)
 
 static ERTS_INLINE void async_reply(ErtsAsync *a, ErtsThrQPrepEnQ_t *prep_enq)
 {
-#if ERTS_USE_ASYNC_READY_Q
+#if ERTS_USE_ASYNC_READY_Q ## Why not out of function?
     ErtsAsyncReadyQ *arq;
 
 #if ERTS_ASYNC_PRINT_JOB

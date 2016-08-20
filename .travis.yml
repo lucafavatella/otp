@@ -26,7 +26,7 @@ script:
   - for A in $(find "$ERL_TOP/lib" -maxdepth 3 -type f -name "$TEST_SPEC.spec" -print | xargs dirname | xargs dirname); do mk_app_and_deps "$A" opt "$BOOT"; done ## If the spec is not in lib/ (thus in erts/), the corresponding app has already been built for sure hence do nothing. Otherwise, ensure corresponding app is built. ## FLAVOR needed for hipe.
   ## Build tests, running a more granular version of 'otp_build tests'...
   - export TESTROOT="$ERL_TOP/release/tests"
-  - make -C "$ERL_TOP/lib/test_server" release_tests ## Uses TESTROOT
+  - make -C "$ERL_TOP/lib/common_test/test_server" release_tests ## Uses TESTROOT
   - make -C "$(dirname $(find $ERL_TOP -type f -name $TEST_SPEC.spec))" release_tests ## Uses TESTROOT
   ## Run tests...
   - cd "$TESTROOT/test_server"
@@ -70,7 +70,6 @@ matrix:
   fast_finish: true
 env:
   ## - BOOT=smp TEST_SPEC=emulator
-  ## - BOOT=smp TEST_SPEC=test_server
   ## - BOOT=smp TEST_SPEC=kernel
   ## - BOOT=smp TEST_SPEC=stdlib
   ## - BOOT=smp TEST_SPEC=compiler

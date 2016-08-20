@@ -76,7 +76,7 @@ env:
   ## - BOOT=smp TEST_SPEC=erl_interface
   ## - BOOT=smp TEST_SPEC=jinterface
   ## - BOOT=smp TEST_SPEC=sasl
-  ## - BOOT=smp TEST_SPEC=tools
+  - BOOT=smp TEST_SPEC=tools
   ## - BOOT=smp TEST_SPEC=runtime_tools
   ## - BOOT=smp TEST_SPEC=parsetools
   ## - BOOT=smp TEST_SPEC=debugger

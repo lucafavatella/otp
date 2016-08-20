@@ -47,7 +47,7 @@ after_script:
   ## Run emacs indentation tests - known to fail. Red http://erlang.org/pipermail/erlang-patches/2012-August/002958.html
   - case "$TEST_SPEC" in tools) make -C "$ERL_TOP"/lib/tools/emacs test_indentation;; *) true;; esac
   ## Dialyze OTP...
-  - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; travis_wait dialyze_otp "dummy.plt"; set +x;; *) true;; esac
+  - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; travis_wait 30 dialyze_otp "dummy.plt"; set +x;; *) true;; esac
 notifications:
   email: false
 matrix:

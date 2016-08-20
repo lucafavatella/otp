@@ -44,6 +44,8 @@ after_script:
   - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.log | grep -v -e '^=logfile' -e '^=started' -e '^=ended' -e '^=finished' -e '^=result[ ]*ok$'
   - cat "$TESTROOT"/test_server/index.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
   - cat "$TESTROOT"/test_server/ct_run.test_server@*/"tests.${TEST_SPEC}_test.logs"/run.*/suite.log.html | curl -F 'sprunge=<-' 'http://sprunge.us' || true
+  ## Run emacs indentation tests - known to fail. Red http://erlang.org/pipermail/erlang-patches/2012-August/002958.html
+  - case "$TEST_SPEC" in tools) make -C "$ERL_TOP"/lib/tools/emacs test_indentation;; *) true;; esac
   ## Dialyze OTP...
   - case "$TEST_SPEC" in dialyzer) cd "$ERL_TOP"; rm ~/.dialyzer_plt; set -x; build_dummy_plt "dummy.plt"; travis_wait dialyze_otp "dummy.plt"; set +x;; *) true;; esac
 notifications:
